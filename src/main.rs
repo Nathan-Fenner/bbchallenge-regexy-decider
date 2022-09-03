@@ -85,6 +85,7 @@ struct Tape {
 enum Word {
     Bit(Bit),
     Repeat(Tape), // MIN_REPEAT_COUNT or more of the element tape.
+    Any,          // Any string of bits, even an empty one.
 }
 
 impl Display for Word {
@@ -97,6 +98,9 @@ impl Display for Word {
                 f.write_str("{")?;
                 f.write_fmt(format_args!("{}", b))?;
                 f.write_str("}")?;
+            }
+            Word::Any => {
+                f.write_str("any")?;
             }
         }
 
@@ -262,6 +266,18 @@ impl Tape {
                     combined_results
                 }
             }
+            Word::Any => {
+                if self.words.len() != 1 {
+                    panic!("any can occur at the last position");
+                }
+                vec![
+                    None,
+                    Some((Bit::B0, self.clone())),
+                    Some((Bit::B1, self.clone())),
+                ]
+                .into_iter()
+                .collect()
+            }
         }
     }
 
@@ -331,6 +347,15 @@ impl Tape {
                     }
                 }
             }
+        }
+
+        if self.words.len() >= 10 {
+            let mut res = self.clone();
+            for _ in 0..5 {
+                res.words.pop();
+            }
+            res.words.push(Word::Any);
+            return Some(res);
         }
 
         None
@@ -455,7 +480,7 @@ struct Args {
     #[clap(
         long,
         value_parser,
-        default_value_t = 10_000,
+        default_value_t = 1_000_000,
         help = "The maximum number of iterations to run before giving up."
     )]
     max_iterations: u64,
@@ -488,15 +513,15 @@ fn main() -> Result<(), i32> {
     // - All 3 cyclers
     // - All 4 unilateral bouncers
     // - All 3 bilateral bouncers
+    // - All 4 translated cyclers
 
     // Fails:
     // - 1RB0LD_1LC1RC_1LA0RC_---0LE_0RB1LD (crash)
-    // - 1RB0RD_1LC1LB_1RA0LB_0RE1RD_---1RA (loop)
-    // - 1RB0LE_1LC0RD_---1LD_1RE0LA_1LA0RE (translated cycler, loops)
-    // - 1RB1RC_1RC---_0RD0LB_1LE0RC_0LE0LA (translated cycler, loops)
+    // - 1RB0RD_1LC1LB_1RA0LB_0RE1RD_---1RA (crash)
     // - 1RB0RB_1LC0RD_1LD1LB_0RA0RE_---1RD (translated unilateral bouncer, crash)
     // - All exponential counters
     // - 1RB1RC_1RC1RE_0RD0RC_1LD1LA_---1RB (bell, crash)
+    // - 1RB0RA_1LB1RC_1RA1LD_1LE0LD_1LC--- (exponential counter, crash)
 
     let machine = Rules::from_string(&args.machine);
 
